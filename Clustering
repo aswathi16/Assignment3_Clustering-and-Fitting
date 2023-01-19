@@ -1,0 +1,79 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jan 12 11:59:00 2023
+
+@author: Aswathi
+"""
+
+
+import pandas as pd
+import numpy as np
+import sklearn.cluster as cluster
+import sklearn.metrics as skmet
+import matplotlib.pyplot as plt
+import scipy.optimize as opt
+
+def read_file(file_name):
+   df = pd.read_csv(file_name)
+   df_transpose = pd.DataFrame.transpose(df)
+   return(df, df_transpose)
+
+#Reads the files
+df_gdp_total, df_gdp_countries = read_file("GDP_per_capita.csv")
+
+header = df_gdp_countries.iloc[0].values.tolist()
+df_gdp_countries.columns = header
+
+df_gdp_countries = df_gdp_countries.iloc[0:]
+df_gdp_countries = df_gdp_countries.iloc[11:55]
+
+
+df_gdp_countries.index = df_gdp_countries.index.astype(int)
+df_gdp_countries = df_gdp_countries[df_gdp_countries.index>1961]
+df_gdp_countries["Years"] = df_gdp_countries.index
+first_column = df_gdp_countries.pop("Years")
+df_gdp_countries.insert(0, "Years", first_column)
+df_gdp_countries = df_gdp_countries.reset_index(drop=True)
+
+def norm(array):
+    min_val = np.min(array) 
+    max_val = np.max(array)
+    scaled = (array-min_val) / (max_val-min_val)  
+    return scaled
+def norm_df(df, first=0, last=None):
+     for col in df.columns[first:last]:     # excluding the first column
+        df[col] = norm(df[col])
+        return df
+    
+plt.scatter(df_gdp_countries.index, df_gdp_countries["World"])
+df_fit = df_gdp_countries[["Years", "World"]].copy()
+
+df_fit = norm_df(df_fit)
+print(df_fit.describe())
+print()
+
+
+for ic in range(2, 10):
+# set up kmeans and fit
+    kmeans = cluster.KMeans(n_clusters=ic)
+    kmeans.fit(df_fit)   
+# extract labels and calculate silhoutte score
+    labels = kmeans.labels_
+    print (ic, skmet.silhouette_score(df_fit, labels))     
+kmeans = cluster.KMeans(n_clusters=4)
+kmeans.fit(df_fit)     
+# extract labels and cluster centres
+labels = kmeans.labels_
+cen = kmeans.cluster_centers_
+plt.figure(figsize=(5.0, 5.0))
+plt.scatter(df_fit["Years"], df_fit["World"], c=labels, cmap="Accent")
+for ic in range(4):
+    x = df_gdp_countries.index
+    y = df_gdp_countries["World"]
+    xc, yc = cen[ic,:]
+    plt.plot(xc, yc, "dk", markersize=5)
+#plt.plot(df_gdp_countries.index, df_co2_countries["United States"])   
+plt.xlabel("Years")
+plt.ylabel("GDP Per Capita")
+plt.title("4 clusters")
+plt.show()
