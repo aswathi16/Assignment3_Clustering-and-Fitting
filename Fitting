@@ -1,0 +1,77 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jan 13 16:51:32 2023
+
+@author: Aswathi
+"""
+#import necessary modules
+import pandas as pd
+import numpy as np
+import sklearn.cluster as cluster
+import sklearn.metrics as skmet
+import matplotlib.pyplot as plt
+import scipy.optimize as opt
+
+
+#Define function to transpose the data
+def read_file(file_name):
+   df = pd.read_csv(file_name)
+   df_transpose = pd.DataFrame.transpose(df)
+   return(df, df_transpose)
+
+#Reads the files into dataframes
+df_pop_total, df_pop = read_file("Population_growth.csv")
+
+#Header setting
+header = df_pop.iloc[0].values.tolist()
+df_pop.columns = header
+
+#Cleaning the dataframe
+df_pop = df_pop.iloc[0:]
+df_pop = df_pop.iloc[11:55]
+
+#Converting index to int
+df_pop.index = df_pop.index.astype(int)
+df_pop = df_pop[df_pop.index>1961]
+df_pop["Years"] = df_pop.index
+first_column = df_pop.pop("Years")
+df_pop.insert(0, "Years", first_column)
+df_pop = df_pop.reset_index(drop=True)
+
+
+df_pop["Years"] = pd.to_numeric(df_pop["Years"])
+df_pop["World"] = pd.to_numeric(df_pop["World"])
+
+#Defining exponential function and logistis function for fitting
+def exp_growth(t, scale, growth):
+    f = scale * np.exp(growth * (t-1970.0)) 
+    return f
+def logistics(t, scale, growth, t0):   
+    f = scale / (1.0 + np.exp(-growth * (t - t0)))
+    return f
+#fit exponential growth
+popt, covar = opt.curve_fit(exp_growth, df_pop["Years"], df_pop["World"])
+
+#Calculate and plot the result
+print("Fit parameter", popt)
+df_pop["pop_exp"] = exp_growth(df_pop["Years"], *popt)
+
+
+
+popt = [4e8, 0.02]
+df_pop["pop_exp"] = exp_growth(df_pop["Years"], *popt)
+
+popt, covar = opt.curve_fit(exp_growth, df_pop["Years"], df_pop["World"], p0=[4e8, 0.02])
+# much better
+print("Fit parameter", popt)
+
+df_pop["pop_exp"] = exp_growth(df_pop["Years"], *popt)
+plt.figure()
+plt.plot(df_pop["Years"], df_pop["World"], label="Years")
+plt.plot(df_pop["Years"], df_pop["pop_exp"], label="fit")
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("population")
+plt.title("Final fit exponential growth")
+plt.show()
+print()
