@@ -1,0 +1,187 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jan 19 22:52:11 2023
+
+@author: HP
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jan 13 16:51:32 2023
+
+@author: Aswathi
+"""
+#import necessary modules
+import pandas as pd
+import numpy as np
+import sklearn.cluster as cluster
+import sklearn.metrics as skmet
+import matplotlib.pyplot as plt
+import scipy.optimize as opt
+
+
+#Define function to transpose the data
+def read_file(file_name):
+   df = pd.read_csv(file_name)
+   df_transpose = pd.DataFrame.transpose(df)
+   return(df, df_transpose)
+
+#Reads the files into dataframes
+df_pop_total, df_pop = read_file("Population_growth.csv")
+df_gdp_total, df_gdp_countries = read_file("GDP_per_capita.csv")
+
+#Header setting
+header = df_pop.iloc[0].values.tolist()
+df_pop.columns = header
+
+#Cleaning the dataframe
+df_pop = df_pop.iloc[0:]
+df_pop = df_pop.iloc[11:55]
+
+#Converting index to int
+df_pop.index = df_pop.index.astype(int)
+df_pop = df_pop[df_pop.index>1961]
+df_pop["Years"] = df_pop.index
+first_column = df_pop.pop("Years")
+df_pop.insert(0, "Years", first_column)
+df_pop = df_pop.reset_index(drop=True)
+
+#Plot the graph before fitting
+plt.plot(df_pop["Years"], df_pop["World"])
+plt.xlabel("year")
+plt.ylabel("population")
+plt.title("Population growth graph before fitting")
+
+#Converting values from float to numeric
+df_pop["Years"] = pd.to_numeric(df_pop["Years"])
+df_pop["World"] = pd.to_numeric(df_pop["World"])
+
+#Defining exponential function and logistis function for fitting
+def exp_growth(t, scale, growth):
+    f = scale * np.exp(growth * (t-1970.0)) 
+    return f
+def logistics(t, scale, growth, t0):   
+    f = scale / (1.0 + np.exp(-growth * (t - t0)))
+    return f
+#fit exponential growth
+popt, covar = opt.curve_fit(exp_growth, df_pop["Years"], df_pop["World"])
+
+#Calculate and plot the result for first fit
+print("Fit parameter", popt)
+df_pop["pop_exp"] = exp_growth(df_pop["Years"], *popt)
+plt.figure()
+plt.plot(df_pop["Years"], df_pop["World"], label="Years")
+plt.plot(df_pop["Years"], df_pop["pop_exp"], label="fit")
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("population")
+plt.title("First Fit")
+plt.show()
+print()
+
+#Improved the start value and plot more better fitting line
+popt = [4e8, 0.02]
+df_pop["pop_exp"] = exp_growth(df_pop["Years"], *popt)
+plt.figure()
+plt.plot(df_pop["Years"], df_pop["World"], label="Years")
+plt.plot(df_pop["Years"], df_pop["pop_exp"], label="fit")
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("population")
+plt.title("Improved start value")
+plt.show()
+print()
+
+popt, covar = opt.curve_fit(exp_growth, df_pop["Years"], df_pop["World"], p0=[4e8, 0.02])
+# much better
+print("Fit parameter", popt)
+
+#Plot the best fitting line
+df_pop["pop_exp"] = exp_growth(df_pop["Years"], *popt)
+plt.figure()
+plt.plot(df_pop["Years"], df_pop["World"], label="Years")
+plt.plot(df_pop["Years"], df_pop["pop_exp"], label="fit")
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("population")
+plt.title("Final fit exponential growth")
+plt.show()
+print()
+
+# Clustering
+
+#Setting the header
+header = df_gdp_countries.iloc[0].values.tolist()
+df_gdp_countries.columns = header
+
+#Cleaning the Dataframe
+df_gdp_countries = df_gdp_countries.iloc[0:]
+df_gdp_countries = df_gdp_countries.iloc[11:55]
+
+#Converting index to int
+df_gdp_countries.index = df_gdp_countries.index.astype(int)
+df_gdp_countries = df_gdp_countries[df_gdp_countries.index>1961]
+df_gdp_countries["Years"] = df_gdp_countries.index
+first_column = df_gdp_countries.pop("Years")
+df_gdp_countries.insert(0, "Years", first_column)
+df_gdp_countries = df_gdp_countries.reset_index(drop=True)
+plt.plot(df_gdp_countries["Years"],df_gdp_countries["World"])
+plt.xlabel("Years")
+plt.ylabel("GDP Per Capita")
+plt.title("GDP per capita graph Before clustering")
+
+#Define functions to normalise one array and iterate over all numerical columns of the dataframe
+def norm(array):
+    min_val = np.min(array) 
+    max_val = np.max(array)
+    scaled = (array-min_val) / (max_val-min_val)  
+    return scaled
+
+# iterate over all numerical columns
+def norm_df(df, first=0, last=None):
+     for col in df.columns[first:last]:     # excluding the first column
+        df[col] = norm(df[col])
+        return df
+    
+#plt.scatter(df_gdp_countries.index, df_gdp_countries["World"])
+
+# extract columns for fitting
+df_fit = df_gdp_countries[["Years", "World"]].copy()
+df_fit = norm_df(df_fit)
+print(df_fit.describe())
+print()
+
+#set up kmeans and fit
+for ic in range(2, 10):
+    kmeans = cluster.KMeans(n_clusters=ic)
+    kmeans.fit(df_fit) 
+    
+# extract labels and calculate silhoutte score
+    labels = kmeans.labels_
+    print (ic, skmet.silhouette_score(df_fit, labels))    
+    
+#plot for 4 clusters
+kmeans = cluster.KMeans(n_clusters=4)
+kmeans.fit(df_fit)  
+   
+# extract labels and cluster centres
+labels = kmeans.labels_
+cen = kmeans.cluster_centers_
+plt.figure(figsize=(5.0, 5.0))
+plt.scatter(df_fit["Years"], df_fit["World"], c=labels, cmap="Accent")
+
+#show cluster centres
+for ic in range(4):
+    x = df_gdp_countries.index
+    y = df_gdp_countries["World"]
+    xc, yc = cen[ic,:]
+    plt.plot(xc, yc, "dk", markersize=5) 
+plt.xlabel("Years")
+plt.ylabel("GDP Per Capita")
+plt.title("4 clusters")
+plt.show()
+
+
+
+
+    
